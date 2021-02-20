@@ -21,6 +21,15 @@ def MyADT():
     return adt.adt(_MyADT)
 
 
+@pytest.fixture
+def OtherADT():
+    class _OtherADT:
+        foo: ()
+        bar: (int,)
+
+    return adt.adt(_OtherADT)
+
+
 # ------------------------------------------------------------------------------
 # Positive testcases
 # ------------------------------------------------------------------------------
@@ -85,11 +94,12 @@ def test_adt_contains(MyADT):
     assert MyADT.bar(1) in MyADT
 
 
-def test_equals(MyADT):
+def test_equals(MyADT, OtherADT):
     assert MyADT.foo() == MyADT.foo()
     assert MyADT.bar(1) == MyADT.bar(1)
     assert MyADT.baz(1, False, "hi", None) == MyADT.baz(1, False, "hi", None)
     assert MyADT.bar(1) != MyADT.bar(2)
+    assert MyADT.bar(1) != OtherADT.bar(1)
 
 
 def test_iter(MyADT):
@@ -129,6 +139,11 @@ def test_typing_field():
 # ------------------------------------------------------------------------------
 # Negative testcases
 # ------------------------------------------------------------------------------
+
+
+def test_init_adt_base_class(MyADT):
+    with pytest.raises(TypeError):
+        MyADT()
 
 
 def test_create_bad_field_annotation():
