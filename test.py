@@ -70,7 +70,6 @@ def test_adt_class_repr(MyADT):
     assert repr(MyADT) == f"<class '{__name__}._MyADT'>"
 
 
-@pytest.mark.xfail(reason="TODO")
 def test_field_class_repr(MyADT):
     assert repr(MyADT.foo) == f"<class '{__name__}._MyADT.foo'>"
     assert repr(MyADT.bar) == f"<class '{__name__}._MyADT.bar'>"

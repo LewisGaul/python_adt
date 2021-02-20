@@ -92,6 +92,7 @@ class ADTMeta(type):
         # Finally link aspects of the base class into the fields.
         for f in fields.values():
             f.__adtbase__ = cls
+            f.__module__ = cls.__module__
             for method_name, method in fieldmethods.items():
                 setattr(f, method_name, _fieldmethod(method, cls, f))
 
