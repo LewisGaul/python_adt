@@ -1,9 +1,8 @@
-from typing import Tuple, Type
+__all__ = ("ADT", "ADTMeta", "adt", "fieldmethod")
 
+import functools
+from typing import Callable, Tuple, Type
 
-# ------------------------------------------------------------------------------
-# Implementation code
-# ------------------------------------------------------------------------------
 
 def _make_field(adt_cls_name: str, field_base_cls: Type, name: str, typ: Tuple):
     def __init__(self, *args):
@@ -19,10 +18,15 @@ def _make_field(adt_cls_name: str, field_base_cls: Type, name: str, typ: Tuple):
         self._args = args
 
     def __repr__(self):
-        return f"{self.__class__.__qualname__}({', '.join(repr(x) for x in self._args)})"
+        return (
+            f"{self.__class__.__qualname__}({', '.join(repr(x) for x in self._args)})"
+        )
 
     def __iter__(self):
         return iter(self._args)
+
+    def __getitem__(self, idx):
+        return self._args[idx]
 
     def __eq__(self, other):
         if not isinstance(other, type(self)):
@@ -37,6 +41,7 @@ def _make_field(adt_cls_name: str, field_base_cls: Type, name: str, typ: Tuple):
             "__init__": __init__,
             "__repr__": __repr__,
             "__iter__": __iter__,
+            "__getitem__": __getitem__,
             "__eq__": __eq__,
         },
     )
@@ -46,6 +51,7 @@ def _make_field(adt_cls_name: str, field_base_cls: Type, name: str, typ: Tuple):
 
 class ADTMeta(type):
     def __new__(mcs, name, bases, namespace):
+        # First make the field classes based on the ADT class annotations.
         annotations = namespace.get("__annotations__", {})
         field_base_cls = type(f"{name}Field", (), {})
         fields = {}
@@ -56,29 +62,47 @@ class ADTMeta(type):
                 )
             fields[f] = _make_field(name, field_base_cls, f, typ)
 
+        # Now make the ADT base class itself.
         def __new__(cls, *args, **kwargs):
             raise TypeError(f"Cannot instantiate ADT class {cls.__name__!r}")
 
         @classmethod
         def is_field(cls, item) -> bool:
-            return (
-                isinstance(item, cls._field_base_class) or
-                (isinstance(item, type) and issubclass(item, cls._field_base_class))
+            return isinstance(item, cls.field_base_class) or (
+                isinstance(item, type) and issubclass(item, cls.field_base_class)
             )
+
+        fieldmethods = {}
+        for attr_name, obj in list(namespace.items()):
+            if getattr(obj, "__isfieldmethod__", False):
+                namespace.pop(attr_name)
+                fieldmethods[attr_name] = obj
 
         namespace = {
             "_fields": fields,
-            "_field_base_class": field_base_cls,
+            "field_base_class": field_base_cls,
             "is_field": is_field,
             **fields,
             **namespace,
-            "__new__": __new__,
+            "__new__": __new__,  # Last to override possible namespace entry
         }
 
-        return super().__new__(mcs, name, bases, namespace)
+        cls = super().__new__(mcs, name, bases, namespace)
+
+        # Finally link aspects of the base class into the fields.
+        for f in fields.values():
+            f.__adtbase__ = cls
+            for method_name, method in fieldmethods.items():
+                setattr(f, method_name, _fieldmethod(method, cls, f))
+
+        return cls
 
     def __contains__(cls, item):
         return cls.is_field(item)
+
+
+class ADT(metaclass=ADTMeta):
+    pass
 
 
 def adt(_cls=None):
@@ -106,43 +130,20 @@ def adt(_cls=None):
     return wrap(_cls)
 
 
+class _fieldmethod:
+    def __init__(self, func: Callable, adt_base_cls: Type, field_cls: Type):
+        self.func = func
+        self.adt_base_cls = adt_base_cls
+        self.field_cls = field_cls
 
-# ------------------------------------------------------------------------------
-# User code
-# ------------------------------------------------------------------------------
+    def __get__(self, obj, objtype=None):
+        @functools.wraps(self.func)
+        def newfunc(*args, **kwargs):
+            return self.func(obj, self.adt_base_cls, *args, **kwargs)
 
-@adt
-class MyADT:
-    foo: ()
-    bar: (int,)
-    baz: (int, bool, str, None)
+        return newfunc
 
 
-print()
-print(MyADT)
-print(type(MyADT))
-print(MyADT.foo)
-
-print()
-print("field instances:")
-print(MyADT.foo())
-print(MyADT.bar(1))
-print(MyADT.baz(1, False, "hi", None))
-
-print()
-print("is_field():")
-print(MyADT.is_field(MyADT))
-print(MyADT.is_field(MyADT.baz))
-print(MyADT.is_field(MyADT.baz(1, False, "hi", None)))
-
-print()
-print("Class contains:")
-print(MyADT in MyADT)
-print(MyADT.baz in MyADT)
-print(MyADT.baz(1, False, "hi", None) in MyADT)
-
-print()
-print("Equality:")
-print(MyADT.foo() == MyADT.foo())
-print(MyADT.bar(1) == MyADT.bar(1))
-print(MyADT.bar(1) == MyADT.bar(2))
+def fieldmethod(funcobj):
+    funcobj.__isfieldmethod__ = True
+    return funcobj
