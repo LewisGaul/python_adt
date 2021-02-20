@@ -1,9 +1,10 @@
 import dataclasses
-from typing import Any, Callable, Optional, Tuple
+from typing import Optional, Tuple
 
 import pytest
 
 import adt
+from examples import Option, Result
 
 # ------------------------------------------------------------------------------
 # Fixtures
@@ -42,6 +43,18 @@ def test_create_with_metaclass():
 
 def test_is_adt(MyADT):
     assert type(MyADT) is adt.ADTMeta
+    assert adt.is_adt(MyADT)
+    assert not adt.is_adt(None)
+    assert not adt.is_adt(MyADT.foo())
+
+
+def test_is_adt_field(MyADT):
+    assert isinstance(MyADT.foo(), MyADT.field_base_class)
+    assert MyADT.field_base_class.__name__ == "_MyADTField"
+    assert adt.is_adt_field(MyADT.foo)
+    assert adt.is_adt_field(MyADT.foo())
+    assert not adt.is_adt_field(None)
+    assert not adt.is_adt_field(MyADT)
 
 
 def test_adt_class_repr(MyADT):
@@ -243,27 +256,13 @@ def test_rust_example():
 # TODO: Implement generics (implement ADTMeta.__getitem__() to return subclass).
 
 
+@pytest.mark.skip("TODO: testing of methods")
 def test_option_type():
-    class Option(metaclass=adt.ADTMeta):
-        Some: (object,)
-        Empty: ()
-
     Option.Some(1)
     Option.Empty()
 
 
 def test_result_type():
-    class Result(metaclass=adt.ADTMeta):
-        Ok: (object,)
-        Error: (object,)
-
-        @adt.fieldmethod
-        def and_then(field, basecls, func: Callable):
-            if type(field) is basecls.Ok:
-                return func(field[0])
-            else:
-                return field
-
     def do_something(value) -> "ResultField":
         if value >= 0:
             return Result.Ok(value >= 100)

@@ -1,4 +1,4 @@
-__all__ = ("ADT", "ADTMeta", "adt", "fieldmethod")
+__all__ = ("ADT", "ADTMeta", "adt", "fieldmethod", "is_adt", "is_adt_field")
 
 import functools
 from typing import Callable, Tuple, Type
@@ -128,6 +128,17 @@ def adt(_cls=None):
 
     # We're called as @adt without parens.
     return wrap(_cls)
+
+
+def is_adt(obj) -> bool:
+    return isinstance(obj, ADTMeta)
+
+
+def is_adt_field(obj) -> bool:
+    base_adt_cls = getattr(obj, "__adtbase__", None)
+    if base_adt_cls:
+        return base_adt_cls.is_field(obj)
+    return False
 
 
 class _fieldmethod:
