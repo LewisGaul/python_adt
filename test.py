@@ -64,6 +64,9 @@ def test_create_with_metaclass():
 
 
 def test_create_generic(GenericADT):
+    assert GenericADT[int, str] is GenericADT[int, str]
+    assert GenericADT[int, str] != GenericADT[bool, str]
+    assert GenericADT[int, str] != GenericADT
     assert GenericADT.foo(1) == GenericADT[int, GenericADT.U].foo(1)
 
 
@@ -202,7 +205,7 @@ def test_unpack(MyADT):
     assert baz_rest == ["hi", None]
 
 
-def test_getitem(MyADT):
+def test_field_getitem(MyADT):
     assert MyADT.bar(1)[0] == 1
     baz = MyADT.baz(1, False, "hi", None)
     assert baz[0] == 1
@@ -285,21 +288,21 @@ def test_minesweeper_cells():
 
         # TODO: Support __init_field__(cls, field) classmethod for validation?
 
-        @classmethod
-        def mine_count(cls, field) -> int:
-            if type(field) in [cls.Flag, cls.Mine, cls.HitMine]:
+        @adt.fieldmethod
+        def mine_count(field, basecls) -> int:
+            if type(field) in [basecls.Flag, basecls.Mine, basecls.HitMine]:
                 (value,) = field
                 return value
             else:
                 return 0
 
-        @classmethod
-        def is_immutable(cls, field) -> bool:
-            return type(field) not in [cls.Unclicked, cls.Flag]
+        @adt.fieldmethod
+        def is_immutable(field, basecls) -> bool:
+            return type(field) not in [basecls.Unclicked, basecls.Flag]
 
-        @classmethod
-        def increment_flag(cls, field):
-            if type(field) is not cls.Flag:
+        @adt.fieldmethod
+        def increment_flag(field, basecls) -> "CellContents":
+            if type(field) is not basecls.Flag:
                 raise TypeError(f"Can only increment flag fields, got {field}")
             (value,) = field
             return type(field)(value + 1)
@@ -311,14 +314,16 @@ def test_minesweeper_cells():
     flag1 = CellContents.Flag(1)
     flag2 = CellContents.Flag(2)
 
-    assert CellContents.mine_count(unclicked) == 0
-    assert CellContents.mine_count(num1) == 0
-    assert CellContents.mine_count(flag2) == 2
+    assert unclicked.mine_count() == 0
+    assert num1.mine_count() == 0
+    assert flag2.mine_count() == 2
 
-    assert CellContents.is_immutable(num1)
-    assert not CellContents.is_immutable(unclicked)
+    assert num1.is_immutable()
+    assert not unclicked.is_immutable()
 
-    assert CellContents.increment_flag(flag1) == flag2
+    assert flag1.increment_flag() == flag2
+    with pytest.raises(TypeError):
+        num1.increment_flag()
 
 
 def test_rust_example():
@@ -336,29 +341,32 @@ def test_rust_example():
 
     class Message(metaclass=adt.ADTMeta):
         Quit: ()
-        Move: (_Move,)  # TODO: Support string type annotations for reusing 'Move' name
+        Move: (
+            _Move,
+        )  # TODO: Support string type annotations for reusing 'Move' name (?)
         Write: (str,)
         ChangeColor: (int, int, int)
 
-    def handle_msg(msg):
-        if type(msg) is Message.Quit:
-            return "The Quit variant has no data to destructure."
-        elif type(msg) is Message.Move:
-            x, y = dataclasses.astuple(msg[0])
-            return f"Move in the x direction {x} and in the y direction {y}"
-        elif type(msg) is Message.Write:
-            return f"Text message: {msg[0]}"
-        elif type(msg) is Message.ChangeColor:
-            r, g, b = msg
-            return f"Change the color to red {r}, green {g}, and blue {b}"
-        assert False
+        @adt.fieldmethod
+        def handle(field, basecls) -> str:
+            if type(field) is Message.Quit:
+                return "The Quit variant has no data to destructure."
+            elif type(field) is Message.Move:
+                x, y = dataclasses.astuple(field[0])
+                return f"Move in the x direction {x} and in the y direction {y}"
+            elif type(field) is Message.Write:
+                return f"Text message: {field[0]}"
+            elif type(field) is Message.ChangeColor:
+                r, g, b = field
+                return f"Change the color to red {r}, green {g}, and blue {b}"
+            assert False
 
-    assert "Quit" in handle_msg(Message.Quit())
-    assert handle_msg(Message.Move(_Move(x=1, y=2))) == (
+    assert "Quit" in Message.Quit().handle()
+    assert Message.Move(_Move(x=1, y=2)).handle() == (
         "Move in the x direction 1 and in the y direction 2"
     )
-    assert handle_msg(Message.Write("hello!")) == "Text message: hello!"
-    assert handle_msg(Message.ChangeColor(0, 160, 255)) == (
+    assert Message.Write("hello!").handle() == "Text message: hello!"
+    assert Message.ChangeColor(0, 160, 255).handle() == (
         "Change the color to red 0, green 160, and blue 255"
     )
 
@@ -370,16 +378,19 @@ def test_option_type():
 
 
 def test_result_type():
-    def do_something(value: int) -> Result[bool, str]:
-        if value >= 0:
-            return Result[bool, str].Ok(value >= 100)
-        else:
-            return Result[bool, str].Error("Negative value")
+    R_int = Result[int, str]
+    R_bool = Result[bool, str]
 
-    ok = Result[int, str].Ok(1)
-    error = Result[int, str].Error("err")
-    assert Result.Ok(1).and_then(do_something) == Result.Ok(False)
-    assert Result.Ok(100).and_then(do_something) == Result.Ok(True)
-    assert Result.Ok(-1).and_then(do_something) == Result.Error("Negative value")
-    assert error.and_then(do_something) == Result.Error("err")
-    assert type(error.and_then(do_something)) is Result[bool, str].Error
+    def do_something(value: int) -> R_bool:
+        if value >= 0:
+            return R_bool.Ok(value >= 100)
+        else:
+            return R_bool.Error("Negative value")
+
+    ok = R_int.Ok(1)
+    error = R_int.Error("err")
+    assert ok.and_then(do_something) == R_bool.Ok(False)
+    assert R_int.Ok(100).and_then(do_something) == R_bool.Ok(True)
+    assert R_int.Ok(-1).and_then(do_something) == R_bool.Error("Negative value")
+    assert error.and_then(do_something) == R_bool.Error("err")
+    assert type(error.and_then(do_something)) is R_bool.Error

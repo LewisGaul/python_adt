@@ -22,21 +22,21 @@ class Option(metaclass=adt.ADTMeta):
         except Exception:
             result_cls = basecls
 
-        if type(field) is basecls.Some:
+        if isinstance(field, basecls.Some):
             return result_cls.Some(func(field[0]))
         else:
             return result_cls.Nothing()
 
     @adt.fieldmethod
     def and_then(field, basecls, func: Callable):
-        if type(field) is basecls.Some:
+        if isinstance(field, basecls.Some):
             return func(field[0])
         else:
             return field
 
     @adt.fieldmethod
     def with_default(field, basecls, default):
-        if type(field) is basecls.Some:
+        if isinstance(field, basecls.Some):
             return field
         else:
             return basecls.Some(default)
@@ -60,7 +60,7 @@ class Result(metaclass=adt.ADTMeta):
         except Exception:
             result_cls = basecls
 
-        if type(field) is basecls.Ok:
+        if isinstance(field, basecls.Ok):
             return result_cls.Ok(func(field[0]))
         else:
             return result_cls.Error(field[0])
@@ -75,7 +75,7 @@ class Result(metaclass=adt.ADTMeta):
         except Exception:
             result_cls = basecls
 
-        if type(field) is basecls.Ok:
+        if isinstance(field, basecls.Ok):
             return result_cls.Ok(field[0])
         else:
             return result_cls.Error(func(field[0]))
@@ -88,21 +88,21 @@ class Result(metaclass=adt.ADTMeta):
         except Exception:
             result_cls = basecls
 
-        if type(field) is basecls.Ok:
+        if isinstance(field, basecls.Ok):
             return func(field[0])
         else:
             return result_cls.Error(field[0])
 
     @adt.fieldmethod
     def with_default(field, basecls, default: "U") -> Union[T, "U"]:
-        if type(field) is basecls.Ok:
+        if isinstance(field, basecls.Ok):
             return field[0]
         else:
             return default
 
     @adt.fieldmethod
     def to_option(field, basecls) -> Option[T]:
-        if type(field) is basecls.Ok:
+        if isinstance(field, basecls.Ok):
             return Option[basecls.T].Some(field[0])
         else:
             return Option[basecls.T].Empty()

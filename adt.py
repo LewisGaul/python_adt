@@ -114,6 +114,9 @@ class ADTMeta(type):
         if len(items) != len(cls._generic_types):
             raise TypeError(f"Expected exactly {len(items)} generic types")
 
+        # TODO: Send this through the main __new__() flow, fieldmethods need
+        #       creating from scratch.
+
         namespace = cls.__dict__.copy()
         base_qualname = re.sub(r"(\[.*\])", "", cls.__qualname__)
         item_names = "[{}]".format(",".join(x.__name__ for x in items))
