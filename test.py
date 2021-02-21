@@ -153,9 +153,6 @@ def test_is_adt_field(MyADT):
     assert adt.is_adt_field(MyADT.foo())
     assert not adt.is_adt_field(None)
     assert not adt.is_adt_field(MyADT)
-    assert not MyADT.is_field(MyADT)
-    assert MyADT.is_field(MyADT.bar)
-    assert MyADT.is_field(MyADT.bar(1))
 
 
 def test_adt_contains(MyADT):
