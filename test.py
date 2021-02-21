@@ -1,5 +1,5 @@
 import dataclasses
-from typing import Optional, Tuple
+from typing import Optional, Tuple, TypeVar
 
 import pytest
 
@@ -30,6 +30,19 @@ def OtherADT():
     return adt.adt(_OtherADT)
 
 
+@pytest.fixture
+def GenericADT():
+    class _GenericADT:
+        T = TypeVar("T")
+        U = TypeVar("U")
+
+        foo: (T,)
+        bar: (T, U)
+        plain: (int,)
+
+    return adt.adt(_GenericADT)
+
+
 # ------------------------------------------------------------------------------
 # Positive testcases
 # ------------------------------------------------------------------------------
@@ -50,38 +63,96 @@ def test_create_with_metaclass():
         baz: (int, bool, str, None)
 
 
-def test_is_adt(MyADT):
+def test_create_generic(GenericADT):
+    assert GenericADT.foo(1) == GenericADT[int, GenericADT.U].foo(1)
+
+
+def test_name_dunders(MyADT, GenericADT):
+    assert MyADT.__name__ == "_MyADT"
+    assert MyADT.__qualname__ == "_MyADT"
+    assert MyADT.Field.__name__ == "Field"
+    assert MyADT.Field.__qualname__ == "_MyADT.Field"
+    assert MyADT.foo.__name__ == "foo"
+    assert MyADT.foo.__qualname__ == "_MyADT.foo"
+    assert GenericADT.__name__ == "_GenericADT"
+    assert GenericADT.__qualname__ == "_GenericADT[T,U]"
+    assert GenericADT.Field.__name__ == "Field"
+    assert GenericADT.Field.__qualname__ == "_GenericADT[T,U].Field"
+    assert GenericADT.foo.__name__ == "foo"
+    assert GenericADT.foo.__qualname__ == "_GenericADT[T,U].foo"
+    assert GenericADT[int, str].__name__ == "_GenericADT"
+    assert GenericADT[int, str].__qualname__ == "_GenericADT[int,str]"
+    assert GenericADT[int, str].Field.__name__ == "Field"
+    assert GenericADT[int, str].Field.__qualname__ == "_GenericADT[int,str].Field"
+    assert GenericADT[int, str].foo.__name__ == "foo"
+    assert GenericADT[int, str].foo.__qualname__ == "_GenericADT[int,str].foo"
+
+
+def test_adt_class_repr(MyADT, GenericADT):
+    assert repr(MyADT) == f"<class '{__name__}._MyADT'>"
+    assert repr(GenericADT) == f"<class '{__name__}._GenericADT[T,U]'>"
+    assert repr(GenericADT[int, str]) == f"<class '{__name__}._GenericADT[int,str]'>"
+
+
+def test_field_class_repr(MyADT, GenericADT):
+    assert repr(MyADT.Field) == f"<class '{__name__}._MyADT.Field'>"
+    assert repr(MyADT.foo) == f"<class '{__name__}._MyADT.foo'>"
+    assert repr(MyADT.bar) == f"<class '{__name__}._MyADT.bar'>"
+    assert repr(GenericADT.Field) == f"<class '{__name__}._GenericADT[T,U].Field'>"
+    assert repr(GenericADT.foo) == f"<class '{__name__}._GenericADT[T,U].foo'>"
+    assert repr(GenericADT.bar) == f"<class '{__name__}._GenericADT[T,U].bar'>"
+    assert (
+        repr(GenericADT[int, str].Field)
+        == f"<class '{__name__}._GenericADT[int,str].Field'>"
+    )
+    assert (
+        repr(GenericADT[int, str].foo)
+        == f"<class '{__name__}._GenericADT[int,str].foo'>"
+    )
+    assert (
+        repr(GenericADT[int, str].bar)
+        == f"<class '{__name__}._GenericADT[int,str].bar'>"
+    )
+
+
+def test_field_inst_repr(MyADT, GenericADT):
+    assert repr(MyADT.foo()) == "_MyADT.foo()"
+    assert repr(MyADT.bar(1)) == "_MyADT.bar(1)"
+    assert repr(MyADT.baz(1, False, "hi", None)) == "_MyADT.baz(1, False, 'hi', None)"
+    assert repr(GenericADT.foo(1)) == "_GenericADT[T,U].foo(1)"
+    assert repr(GenericADT.bar(1, "hi")) == "_GenericADT[T,U].bar(1, 'hi')"
+    assert repr(GenericADT.plain(1)) == "_GenericADT[T,U].plain(1)"
+    assert repr(GenericADT[int, str].foo(1)) == "_GenericADT[int,str].foo(1)"
+    assert (
+        repr(GenericADT[int, str].bar(1, "hi")) == "_GenericADT[int,str].bar(1, 'hi')"
+    )
+    assert repr(GenericADT[int, str].plain(1)) == "_GenericADT[int,str].plain(1)"
+
+
+def test_class_hierarchy(MyADT, GenericADT):
     assert type(MyADT) is adt.ADTMeta
+    assert issubclass(MyADT.foo, MyADT.Field)
+    assert isinstance(MyADT.foo(), MyADT.Field)
+
+    assert type(GenericADT) is adt.ADTMeta
+    assert issubclass(GenericADT.foo, GenericADT.Field)
+    assert issubclass(GenericADT[int, str], GenericADT)
+    assert issubclass(GenericADT[int, str].Field, GenericADT.Field)
+    assert issubclass(GenericADT[int, str].foo, GenericADT[int, str].Field)
+    assert isinstance(GenericADT[int, str].plain(1), GenericADT.Field)
+
+
+def test_is_adt(MyADT):
     assert adt.is_adt(MyADT)
     assert not adt.is_adt(None)
     assert not adt.is_adt(MyADT.foo())
 
 
 def test_is_adt_field(MyADT):
-    assert isinstance(MyADT.foo(), MyADT.field_base_class)
-    assert MyADT.field_base_class.__name__ == "_MyADTField"
     assert adt.is_adt_field(MyADT.foo)
     assert adt.is_adt_field(MyADT.foo())
     assert not adt.is_adt_field(None)
     assert not adt.is_adt_field(MyADT)
-
-
-def test_adt_class_repr(MyADT):
-    assert repr(MyADT) == f"<class '{__name__}._MyADT'>"
-
-
-def test_field_class_repr(MyADT):
-    assert repr(MyADT.foo) == f"<class '{__name__}._MyADT.foo'>"
-    assert repr(MyADT.bar) == f"<class '{__name__}._MyADT.bar'>"
-
-
-def test_field_inst_repr(MyADT):
-    assert repr(MyADT.foo()) == "_MyADT.foo()"
-    assert repr(MyADT.bar(1)) == "_MyADT.bar(1)"
-    assert repr(MyADT.baz(1, False, "hi", None)) == "_MyADT.baz(1, False, 'hi', None)"
-
-
-def test_is_field(MyADT):
     assert not MyADT.is_field(MyADT)
     assert MyADT.is_field(MyADT.bar)
     assert MyADT.is_field(MyADT.bar(1))
@@ -143,6 +214,11 @@ def test_typing_field():
 def test_init_adt_base_class(MyADT):
     with pytest.raises(TypeError):
         MyADT()
+
+
+def test_init_adt_field_base_class(MyADT):
+    with pytest.raises(TypeError):
+        MyADT.Field()
 
 
 def test_create_bad_field_annotation():
@@ -267,9 +343,6 @@ def test_rust_example():
     )
 
 
-# TODO: Implement generics (implement ADTMeta.__getitem__() to return subclass).
-
-
 @pytest.mark.skip("TODO: testing of methods")
 def test_option_type():
     Option.Some(1)
@@ -277,15 +350,16 @@ def test_option_type():
 
 
 def test_result_type():
-    def do_something(value) -> "ResultField":
+    def do_something(value: int) -> Result[bool, str].Field:
         if value >= 0:
-            return Result.Ok(value >= 100)
+            return Result[bool, str].Ok(value >= 100)
         else:
-            return Result.Error("Negative value")
+            return Result[bool, str].Error("Negative value")
 
-    ok = Result.Ok(1)
-    error = Result.Error("err")
+    ok = Result[int, str].Ok(1)
+    error = Result[int, str].Error("err")
     assert Result.Ok(1).and_then(do_something) == Result.Ok(False)
     assert Result.Ok(100).and_then(do_something) == Result.Ok(True)
     assert Result.Ok(-1).and_then(do_something) == Result.Error("Negative value")
     assert error.and_then(do_something) == Result.Error("err")
+    assert type(error.and_then(do_something)) is Result[bool, str].Error

@@ -1,17 +1,18 @@
 __all__ = ("ADT", "ADTMeta", "adt", "fieldmethod", "is_adt", "is_adt_field")
 
 import functools
-from typing import Callable, Tuple, Type
+import re
+from typing import Callable, Tuple, Type, TypeVar
 
 
-def _make_field(adt_cls_name: str, field_base_cls: Type, name: str, typ: Tuple):
+def _make_field(adt_cls_name: str, field_base_cls: Type, name: str, arg_types: Tuple):
     def __init__(self, *args):
-        if len(args) != len(typ):
+        if len(args) != len(self.__arg_types__):
             raise TypeError(
-                f"Expected {len(typ)} arg(s) for {name!r} field, got {len(args)}"
+                f"Expected {len(self.__arg_types__)} arg(s) for {name!r} field, got {len(args)}"
             )
-        for f, t in zip(args, typ):
-            if not (f is t is None) and not isinstance(f, t):
+        for f, t in zip(args, self.__arg_types__):
+            if not (f is t is None) and type(t) is not TypeVar and not isinstance(f, t):
                 raise TypeError(
                     f"Expected instance of type {t.__name__!r}, got {type(f).__name__!r}"
                 )
@@ -29,7 +30,7 @@ def _make_field(adt_cls_name: str, field_base_cls: Type, name: str, typ: Tuple):
         return self._args[idx]
 
     def __eq__(self, other):
-        if not isinstance(other, type(self)):
+        if not (isinstance(other, type(self)) or isinstance(self, type(other))):
             return False
         return all(x == y for x, y in zip(iter(self), iter(other)))
 
@@ -37,12 +38,12 @@ def _make_field(adt_cls_name: str, field_base_cls: Type, name: str, typ: Tuple):
         name,
         (field_base_cls,),
         {
-            "__qualname__": f"{adt_cls_name}.{name}",
             "__init__": __init__,
             "__repr__": __repr__,
             "__iter__": __iter__,
             "__getitem__": __getitem__,
             "__eq__": __eq__,
+            "__arg_types__": arg_types,
         },
     )
 
@@ -51,9 +52,31 @@ def _make_field(adt_cls_name: str, field_base_cls: Type, name: str, typ: Tuple):
 
 class ADTMeta(type):
     def __new__(mcs, name, bases, namespace):
+        fieldmethods = {}
+        generic_types = {}
+        for attr_name, obj in list(namespace.items()):
+            if getattr(obj, "__isfieldmethod__", False):
+                namespace.pop(attr_name)
+                fieldmethods[attr_name] = obj
+            elif isinstance(obj, TypeVar):
+                generic_types[attr_name] = obj
+
+        namespace = dict(namespace)
+
         # First make the field classes based on the ADT class annotations.
-        annotations = namespace.get("__annotations__", {})
-        field_base_cls = type(f"{name}Field", (), {})
+        annotations = namespace.pop("__annotations__", {})
+
+        def base_field_init(self):
+            raise TypeError("Cannot instantiate base field class")
+
+        field_base_cls = type(
+            f"Field",
+            (),
+            {
+                "__module__": namespace["__module__"],
+                "__init__": base_field_init,
+            },
+        )
         fields = {}
         for f, typ in annotations.items():
             if type(typ) is not tuple:
@@ -68,31 +91,33 @@ class ADTMeta(type):
 
         @classmethod
         def is_field(cls, item) -> bool:
-            return isinstance(item, cls.field_base_class) or (
-                isinstance(item, type) and issubclass(item, cls.field_base_class)
+            return isinstance(item, cls.Field) or (
+                isinstance(item, type) and issubclass(item, cls.Field)
             )
 
-        fieldmethods = {}
-        for attr_name, obj in list(namespace.items()):
-            if getattr(obj, "__isfieldmethod__", False):
-                namespace.pop(attr_name)
-                fieldmethods[attr_name] = obj
-
         namespace = {
+            **namespace,  # First as lowest priority (user-defined stuff)
+            "__new__": __new__,
             "_fields": fields,
-            "field_base_class": field_base_cls,
+            "_generic_types": generic_types,
+            "Field": field_base_cls,
             "is_field": is_field,
             **fields,
-            **namespace,
-            "__new__": __new__,  # Last to override possible namespace entry
         }
 
         cls = super().__new__(mcs, name, bases, namespace)
+        if generic_types:
+            cls.__qualname__ += "[{}]".format(
+                ",".join(x.__name__ for x in generic_types.values())
+            )
 
         # Finally link aspects of the base class into the fields.
+        cls.Field.__adtbase__ = cls
+        cls.Field.__qualname__ = cls.__qualname__ + ".Field"
         for f in fields.values():
             f.__adtbase__ = cls
             f.__module__ = cls.__module__
+            f.__qualname__ = cls.__qualname__ + "." + f.__name__
             for method_name, method in fieldmethods.items():
                 setattr(f, method_name, _fieldmethod(method, cls, f))
 
@@ -101,12 +126,69 @@ class ADTMeta(type):
     def __contains__(cls, item):
         return cls.is_field(item)
 
+    @functools.lru_cache()
+    def __getitem__(cls, items):
+        """Create subclass of given class with generics filled in."""
+        if not isinstance(items, tuple):
+            items = (items,)
+        if len(items) != len(cls._generic_types):
+            raise TypeError(f"Expected exactly {len(items)} generic types")
+
+        namespace = cls.__dict__.copy()
+        base_qualname = re.sub(r"(\[.*\])", "", cls.__qualname__)
+        item_names = "[{}]".format(",".join(x.__name__ for x in items))
+        namespace["__qualname__"] = f"{base_qualname}{item_names}"
+
+        # Get mapping of typevars to concrete types.
+        typevar_mapping = {}
+        for (generic, typevar), typ in zip(namespace["_generic_types"].items(), items):
+            namespace[generic] = typ
+            namespace["_generic_types"][generic] = typ
+            typevar_mapping[typevar] = typ
+
+        # Subclass generic fields to concrete fields.
+        new_base_field_cls = type(cls.Field)(
+            "Field",
+            (cls.Field,),
+            {
+                "__module__": cls.Field.__module__,
+                "__qualname__": f"{namespace['__qualname__']}.Field",
+            },
+        )
+        namespace["Field"] = new_base_field_cls
+        new_fields = {}
+        for field_name, field_cls in namespace["_fields"].items():
+            __arg_types__ = tuple(
+                typevar_mapping.get(t, t) for t in field_cls.__arg_types__
+            )
+            new_field_cls = type(field_cls)(
+                field_name,
+                (
+                    new_base_field_cls,
+                    field_cls,
+                ),
+                {
+                    "__module__": field_cls.__module__,
+                    "__qualname__": f"{namespace['__qualname__']}.{field_name}",
+                    "__arg_types__": __arg_types__,
+                },
+            )
+            new_fields[field_name] = new_field_cls
+            namespace[field_name] = new_field_cls
+        namespace["_fields"] = new_fields
+
+        new_cls = super().__new__(type(cls), cls.__name__, (cls,), namespace)
+        new_cls.Field.__adtbase__ = new_cls
+        for f in new_cls._fields.values():
+            f.__adtbase__ = cls
+        return new_cls
+
 
 class ADT(metaclass=ADTMeta):
     pass
 
 
-def adt(_cls=None):
+def adt(_cls=None) -> ADTMeta:
     """
     Make a class into an ADT (Algebraic Data Type).
 

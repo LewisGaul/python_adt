@@ -1,20 +1,31 @@
 __all__ = ("Option", "Result")
 
-from typing import Callable
+from typing import Callable, TypeVar, Union
 
 import adt
 
 
 class Option(metaclass=adt.ADTMeta):
-    Some: (object,)
+
+    T = TypeVar("T")
+
+    Some: (T,)
     Empty: ()
 
     @adt.fieldmethod
-    def map(field, basecls, func: Callable):
+    def map(field, basecls, func: Callable[[T], "U"]) -> "Option[U].Field":
+        # Convert to new option type.
+        try:
+            ok_type = func.__annotations__["return"]
+            assert isinstance(ok_type, type)
+            result_cls = basecls[ok_type]
+        except Exception:
+            result_cls = basecls
+
         if type(field) is basecls.Some:
-            return basecls.Some(func(field[0]))
+            return result_cls.Some(func(field[0]))
         else:
-            return field
+            return result_cls.Nothing()
 
     @adt.fieldmethod
     def and_then(field, basecls, func: Callable):
@@ -32,46 +43,74 @@ class Option(metaclass=adt.ADTMeta):
 
 
 class Result(metaclass=adt.ADTMeta):
-    Ok: (object,)
-    Error: (object,)
+
+    T = TypeVar("T")
+    E = TypeVar("E")
+
+    Ok: (T,)
+    Error: (E,)
 
     @adt.fieldmethod
-    def map(field, basecls, func: Callable):
+    def map(field, basecls, func: Callable[[T], "U"]) -> "Result[U,E].Field":
+        # Convert to new result type.
+        try:
+            ok_type = func.__annotations__["return"]
+            assert isinstance(ok_type, type)
+            result_cls = basecls[ok_type, basecls.E]
+        except Exception:
+            result_cls = basecls
+
         if type(field) is basecls.Ok:
-            return basecls.Ok(func(field[0]))
+            return result_cls.Ok(func(field[0]))
         else:
-            return field
+            return result_cls.Error(field[0])
 
     @adt.fieldmethod
-    def map_error(field, basecls, func: Callable):
+    def map_error(field, basecls, func: Callable[[E], "F"]) -> "Result[T,F].Field":
+        # Convert to new result type.
+        try:
+            err_type = func.__annotations__["return"]
+            assert isinstance(err_type, type)
+            result_cls = basecls[basecls.T, err_type]
+        except Exception:
+            result_cls = basecls
+
         if type(field) is basecls.Ok:
-            return field
+            return result_cls.Ok(field[0])
         else:
-            return basecls.Error(func(field[0]))
+            return result_cls.Error(func(field[0]))
 
     @adt.fieldmethod
-    def and_then(field, basecls, func: Callable):
+    def and_then(
+        field, basecls, func: Callable[[T], "Result[U,E].Field"]
+    ) -> "Result[U,E].Field":
+        # Convert to new result type.
+        try:
+            result_cls = func.__annotations__["return"].__adtbase__
+        except Exception:
+            result_cls = basecls
+
         if type(field) is basecls.Ok:
             return func(field[0])
         else:
-            return field
+            return result_cls.Error(field[0])
 
     @adt.fieldmethod
-    def with_default(field, basecls, default):
+    def with_default(field, basecls, default: "U") -> Union[T, "U"]:
         if type(field) is basecls.Ok:
-            return field
+            return field[0]
         else:
-            return basecls.Ok(default)
+            return default
 
     @adt.fieldmethod
-    def to_option(field, basecls):
+    def to_option(field, basecls) -> Option[T]:
         if type(field) is basecls.Ok:
-            return Option.Some(field[0])
+            return Option[basecls.T].Some(field[0])
         else:
-            return Option.Empty()
+            return Option[basecls.T].Empty()
 
     @classmethod
-    def from_option(cls, option, error):
+    def from_option(cls, option: Option[T], error: E) -> "Result[T,E].Field":
         if type(option) is Option.Some:
             return cls.Ok(option[0])
         else:
