@@ -6,15 +6,7 @@ import types
 from typing import Callable, Tuple, Type, TypeVar
 
 
-class _FieldMeta(type):
-    def __new__(mcs, name, bases, namespace):
-        return super().__new__(mcs, name, bases, namespace)
-
-    def __instancecheck__(self, instance):
-        return super().__instancecheck__(instance)
-
-
-class _FieldBase(metaclass=_FieldMeta):
+class _FieldBase:
 
     __arg_types__: Tuple
     __adtbase__: "ADTMeta"
@@ -74,7 +66,6 @@ class ADTMeta(type):
         annotations = namespace.pop("__annotations__", {})
         field_base_cls = types.new_class("_FieldBase", (_FieldBase,))
         field_base_cls.__module__ = namespace["__module__"]
-        field_base_cls.__name__ = "Field"  # TODO: remove
         fields = {}
 
         # Make the ADT base class.
@@ -87,7 +78,6 @@ class ADTMeta(type):
                 "_fields": fields,
                 "_generic_types": generic_types,
                 "_FieldBase": field_base_cls,
-                "Field": field_base_cls,  # TODO: remove
             }
         )
         cls = super().__new__(mcs, name, bases, namespace)
@@ -137,15 +127,15 @@ class ADTMeta(type):
             typevar_mapping[typevar] = typ
 
         # Subclass generic fields to concrete fields.
-        new_base_field_cls = type(cls.Field)(
-            "Field",
-            (cls.Field,),
+        new_base_field_cls = type(cls._FieldBase)(
+            "_FieldBase",
+            (cls._FieldBase,),
             {
-                "__module__": cls.Field.__module__,
-                "__qualname__": f"{namespace['__qualname__']}.Field",
+                "__module__": cls._FieldBase.__module__,
+                "__qualname__": f"{namespace['__qualname__']}._FieldBase",
             },
         )
-        namespace["Field"] = new_base_field_cls
+        namespace["_FieldBase"] = new_base_field_cls
         new_fields = {}
         for field_name, field_cls in namespace["_fields"].items():
             __arg_types__ = tuple(
@@ -168,10 +158,21 @@ class ADTMeta(type):
         namespace["_fields"] = new_fields
 
         new_cls = super().__new__(type(cls), cls.__name__, (cls,), namespace)
-        new_cls.Field.__adtbase__ = new_cls
+        new_cls._FieldBase.__adtbase__ = new_cls
         for f in new_cls._fields.values():
             f.__adtbase__ = cls
         return new_cls
+
+    def __subclasscheck__(cls, subclass):
+        if subclass in cls._fields.values():
+            return True
+        for base in subclass.__bases__:
+            if base in cls._fields.values():
+                return True
+        return super().__subclasscheck__(subclass)
+
+    def __instancecheck__(cls, instance):
+        return issubclass(type(instance), cls)
 
 
 class ADT(metaclass=ADTMeta):

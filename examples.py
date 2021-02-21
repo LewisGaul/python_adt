@@ -13,7 +13,7 @@ class Option(metaclass=adt.ADTMeta):
     Empty: ()
 
     @adt.fieldmethod
-    def map(field, basecls, func: Callable[[T], "U"]) -> "Option[U].Field":
+    def map(field, basecls, func: Callable[[T], "U"]) -> "Option[U]":
         # Convert to new option type.
         try:
             ok_type = func.__annotations__["return"]
@@ -51,7 +51,7 @@ class Result(metaclass=adt.ADTMeta):
     Error: (E,)
 
     @adt.fieldmethod
-    def map(field, basecls, func: Callable[[T], "U"]) -> "Result[U,E].Field":
+    def map(field, basecls, func: Callable[[T], "U"]) -> "Result[U,E]":
         # Convert to new result type.
         try:
             ok_type = func.__annotations__["return"]
@@ -66,7 +66,7 @@ class Result(metaclass=adt.ADTMeta):
             return result_cls.Error(field[0])
 
     @adt.fieldmethod
-    def map_error(field, basecls, func: Callable[[E], "F"]) -> "Result[T,F].Field":
+    def map_error(field, basecls, func: Callable[[E], "F"]) -> "Result[T,F]":
         # Convert to new result type.
         try:
             err_type = func.__annotations__["return"]
@@ -81,12 +81,10 @@ class Result(metaclass=adt.ADTMeta):
             return result_cls.Error(func(field[0]))
 
     @adt.fieldmethod
-    def and_then(
-        field, basecls, func: Callable[[T], "Result[U,E].Field"]
-    ) -> "Result[U,E].Field":
+    def and_then(field, basecls, func: Callable[[T], "Result[U,E]"]) -> "Result[U,E]":
         # Convert to new result type.
         try:
-            result_cls = func.__annotations__["return"].__adtbase__
+            result_cls = func.__annotations__["return"]
         except Exception:
             result_cls = basecls
 
@@ -110,7 +108,7 @@ class Result(metaclass=adt.ADTMeta):
             return Option[basecls.T].Empty()
 
     @classmethod
-    def from_option(cls, option: Option[T], error: E) -> "Result[T,E].Field":
+    def from_option(cls, option: Option[T], error: E) -> "Result[T,E]":
         if type(option) is Option.Some:
             return cls.Ok(option[0])
         else:

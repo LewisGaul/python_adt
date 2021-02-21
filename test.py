@@ -70,20 +70,23 @@ def test_create_generic(GenericADT):
 def test_name_dunders(MyADT, GenericADT):
     assert MyADT.__name__ == "_MyADT"
     assert MyADT.__qualname__ == "_MyADT"
-    assert MyADT.Field.__name__ == "Field"
-    assert MyADT.Field.__qualname__ == "_MyADT.Field"
+    assert MyADT._FieldBase.__name__ == "_FieldBase"
+    assert MyADT._FieldBase.__qualname__ == "_MyADT._FieldBase"
     assert MyADT.foo.__name__ == "foo"
     assert MyADT.foo.__qualname__ == "_MyADT.foo"
     assert GenericADT.__name__ == "_GenericADT"
     assert GenericADT.__qualname__ == "_GenericADT[T,U]"
-    assert GenericADT.Field.__name__ == "Field"
-    assert GenericADT.Field.__qualname__ == "_GenericADT[T,U].Field"
+    assert GenericADT._FieldBase.__name__ == "_FieldBase"
+    assert GenericADT._FieldBase.__qualname__ == "_GenericADT[T,U]._FieldBase"
     assert GenericADT.foo.__name__ == "foo"
     assert GenericADT.foo.__qualname__ == "_GenericADT[T,U].foo"
     assert GenericADT[int, str].__name__ == "_GenericADT"
     assert GenericADT[int, str].__qualname__ == "_GenericADT[int,str]"
-    assert GenericADT[int, str].Field.__name__ == "Field"
-    assert GenericADT[int, str].Field.__qualname__ == "_GenericADT[int,str].Field"
+    assert GenericADT[int, str]._FieldBase.__name__ == "_FieldBase"
+    assert (
+        GenericADT[int, str]._FieldBase.__qualname__
+        == "_GenericADT[int,str]._FieldBase"
+    )
     assert GenericADT[int, str].foo.__name__ == "foo"
     assert GenericADT[int, str].foo.__qualname__ == "_GenericADT[int,str].foo"
 
@@ -95,15 +98,18 @@ def test_adt_class_repr(MyADT, GenericADT):
 
 
 def test_field_class_repr(MyADT, GenericADT):
-    assert repr(MyADT.Field) == f"<class '{__name__}._MyADT.Field'>"
+    assert repr(MyADT._FieldBase) == f"<class '{__name__}._MyADT._FieldBase'>"
     assert repr(MyADT.foo) == f"<class '{__name__}._MyADT.foo'>"
     assert repr(MyADT.bar) == f"<class '{__name__}._MyADT.bar'>"
-    assert repr(GenericADT.Field) == f"<class '{__name__}._GenericADT[T,U].Field'>"
+    assert (
+        repr(GenericADT._FieldBase)
+        == f"<class '{__name__}._GenericADT[T,U]._FieldBase'>"
+    )
     assert repr(GenericADT.foo) == f"<class '{__name__}._GenericADT[T,U].foo'>"
     assert repr(GenericADT.bar) == f"<class '{__name__}._GenericADT[T,U].bar'>"
     assert (
-        repr(GenericADT[int, str].Field)
-        == f"<class '{__name__}._GenericADT[int,str].Field'>"
+        repr(GenericADT[int, str]._FieldBase)
+        == f"<class '{__name__}._GenericADT[int,str]._FieldBase'>"
     )
     assert (
         repr(GenericADT[int, str].foo)
@@ -131,15 +137,25 @@ def test_field_inst_repr(MyADT, GenericADT):
 
 def test_class_hierarchy(MyADT, GenericADT):
     assert type(MyADT) is adt.ADTMeta
-    assert issubclass(MyADT.foo, MyADT.Field)
-    assert isinstance(MyADT.foo(), MyADT.Field)
+    assert issubclass(MyADT._FieldBase, adt._FieldBase)
+    assert issubclass(MyADT.foo, MyADT._FieldBase)
+    assert isinstance(MyADT.foo(), MyADT._FieldBase)
+    assert not issubclass(MyADT._FieldBase, MyADT)
+    assert issubclass(MyADT.foo, MyADT)
+    assert isinstance(MyADT.foo(), MyADT)
 
     assert type(GenericADT) is adt.ADTMeta
-    assert issubclass(GenericADT.foo, GenericADT.Field)
+    assert issubclass(GenericADT.foo, GenericADT._FieldBase)
     assert issubclass(GenericADT[int, str], GenericADT)
-    assert issubclass(GenericADT[int, str].Field, GenericADT.Field)
-    assert issubclass(GenericADT[int, str].foo, GenericADT[int, str].Field)
-    assert isinstance(GenericADT[int, str].plain(1), GenericADT.Field)
+    assert issubclass(GenericADT[int, str]._FieldBase, GenericADT._FieldBase)
+    assert issubclass(GenericADT[int, str].foo, GenericADT[int, str]._FieldBase)
+    assert isinstance(GenericADT[int, str].plain(1), GenericADT._FieldBase)
+    assert issubclass(GenericADT[int, str].foo, GenericADT[int, str])
+    assert isinstance(GenericADT[int, str].plain(1), GenericADT[int, str])
+    assert issubclass(GenericADT[int, str].foo, GenericADT)
+    assert isinstance(GenericADT[int, str].plain(1), GenericADT)
+    assert not issubclass(GenericADT.foo, GenericADT[int, str])
+    assert not isinstance(GenericADT.plain(1), GenericADT[int, str])
 
 
 def test_is_adt(MyADT):
@@ -215,7 +231,7 @@ def test_init_adt_base_class(MyADT):
 
 def test_init_adt_field_base_class(MyADT):
     with pytest.raises(TypeError):
-        MyADT.Field()
+        MyADT._FieldBase()
 
 
 def test_create_bad_field_annotation():
@@ -244,6 +260,13 @@ def test_missing_field_value(MyADT):
         MyADT.bar()
     with pytest.raises(TypeError):
         MyADT.baz(1, False)
+
+
+def test_invalid_generic(GenericADT):
+    with pytest.raises(TypeError):
+        GenericADT[int]
+    with pytest.raises(TypeError):
+        GenericADT[int, int, int]
 
 
 # ------------------------------------------------------------------------------
@@ -347,7 +370,7 @@ def test_option_type():
 
 
 def test_result_type():
-    def do_something(value: int) -> Result[bool, str].Field:
+    def do_something(value: int) -> Result[bool, str]:
         if value >= 0:
             return Result[bool, str].Ok(value >= 100)
         else:
