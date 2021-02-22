@@ -4,7 +4,8 @@ from typing import Optional, Tuple, TypeVar
 import pytest
 
 import adt
-from examples import Option, Result
+from adt.examples import Option, Result
+
 
 # ------------------------------------------------------------------------------
 # Fixtures

@@ -146,10 +146,7 @@ class ADTMeta(type):
             )
             new_field_cls = type(field_cls)(
                 field_name,
-                (
-                    new_base_field_cls,
-                    field_cls,
-                ),
+                (new_base_field_cls, field_cls,),
                 {
                     "__module__": field_cls.__module__,
                     "__qualname__": f"{namespace['__qualname__']}.{field_name}",
@@ -232,6 +229,7 @@ class _fieldmethod:
         return newfunc
 
 
+# TODO: Make fieldmethod redundant (make it the default).
 def fieldmethod(funcobj):
     funcobj.__isfieldmethod__ = True
     return funcobj
