@@ -1,4 +1,5 @@
 [![Build badge](https://img.shields.io/github/workflow/status/LewisGaul/python_adt/Workflow%20for%20basic%20tests/master)](https://github.com/LewisGaul/python_adt/actions/workflows/basic-test.yml?query=branch%3Amaster)
+[![Codecov badge](https://img.shields.io/codecov/c/github/LewisGaul/python_adt/master)](https://codecov.io/gh/LewisGaul/python_adt/)
 
 # Algebraic Data Types in Python
 
