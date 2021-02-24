@@ -1,4 +1,4 @@
-[![Build badge](https://img.shields.io/github/workflow/status/LewisGaul/python_adt/Workflow%20for%20basic%20tests/main)](https://github.com/LewisGaul/python_adt/actions/workflows/basic-test.yml?query=branch%3Amain)
+[![Build badge](https://img.shields.io/github/workflow/status/LewisGaul/python_adt/basic-tests/main)](https://github.com/LewisGaul/python_adt/actions/workflows/basic-tests.yml?query=branch%3Amain)
 [![Codecov badge](https://img.shields.io/codecov/c/github/LewisGaul/python_adt/main)](https://codecov.io/gh/LewisGaul/python_adt/)
 [![Documentation Status](https://readthedocs.org/projects/adt/badge/?version=latest)](https://adt.readthedocs.io/en/latest/?badge=latest)
 

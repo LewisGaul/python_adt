@@ -1,4 +1,4 @@
-name: Workflow for basic tests
+name: basic-tests
 on:
   push:
     paths:
