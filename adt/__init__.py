@@ -1,4 +1,5 @@
 __all__ = ("ADT", "ADTMeta", "adt", "fieldmethod", "is_adt", "is_adt_field")
+__version__ = "0.0.1"
 
 import functools
 import re
@@ -146,7 +147,7 @@ class ADTMeta(type):
             )
             new_field_cls = type(field_cls)(
                 field_name,
-                (new_base_field_cls, field_cls,),
+                (new_base_field_cls, field_cls),
                 {
                     "__module__": field_cls.__module__,
                     "__qualname__": f"{namespace['__qualname__']}.{field_name}",
