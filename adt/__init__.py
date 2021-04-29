@@ -58,6 +58,7 @@ class ADTMeta(type):
         generic_types = {}
         for attr_name, obj in list(namespace.items()):
             if getattr(obj, "__isfieldmethod__", False):
+                # TODO: Ensure callable as cls.somefieldmethod(field).
                 namespace.pop(attr_name)
                 fieldmethods[attr_name] = obj
             elif isinstance(obj, TypeVar):
