@@ -1,13 +1,42 @@
-# BUILD
+# PROJECT
 # =====
-[build-system]
-# Minimum requirements for the build system to execute.
-requires = [
-    "setuptools >= 42",
-    "wheel",
+
+[project]
+name = "adt"
+dynamic = ["version"]
+description = "Algebraic Data Types in Python"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Development Status :: 2 - Pre-Alpha",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Intended Audience :: Developers",
 ]
+authors = [
+    { name = "Lewis Gaul", email = "lewis.gaul@gmail.com" }
+]
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.9"
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/LewisGaul/python_adt/"
+Issues = "https://github.com/LewisGaul/python_adt/issues/"
+Documentation = "https://adt.readthedocs.io/"
+
+[build-system]
+requires = ["setuptools >= 61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
+[tool.setuptools]
+license-files = []  # https://github.com/pypa/setuptools/issues/4759#issuecomment-2547778989
+
+[tool.setuptools.packages.find]
+include = ["adt"]
+
+[tool.setuptools.dynamic]
+version = { attr = "adt.__version__" }
 
 # TOOLS
 # =====
@@ -16,7 +45,7 @@ build-backend = "setuptools.build_meta"
 # -----
 [tool.black]
 line-length = 88
-target_version = ['py36']
+target_version = ['py39']
 include = '\.pyi?$'
 exclude = '''
 (

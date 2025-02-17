@@ -1,5 +1,5 @@
 __all__ = ("ADT", "ADTMeta", "adt", "fieldmethod", "is_adt", "is_adt_field")
-__version__ = "0.0.1"
+__version__ = "0.0.2"
 
 import functools
 import re
